@@ -85,6 +85,9 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
 .auth-note{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(250,204,21,.1);font-size:.78rem;color:var(--sub);margin-top:14px;}
 .phone-input{display:flex;gap:8px;}
 .phone-input span{display:grid;place-items:center;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:.9rem;color:var(--sub);}
+.product-suggestions{display:flex;flex-direction:column;gap:4px;margin-top:5px;}
+.product-suggestion{width:100%;margin:0;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--ink);text-align:left;font-size:.88rem;cursor:pointer;}
+.product-suggestion:active{background:var(--accent);}
 .auth-error{color:var(--danger);font-size:.82rem;margin-top:10px;}
 .access-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
 .access-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:rgba(45,122,85,.12);color:var(--success);font-size:.75rem;font-weight:600;white-space:nowrap;}
@@ -168,6 +171,7 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
       <label>Product</label>
       <input id="cartProduct" list="cartProductOptions" placeholder="Type the first two letters of a product" autocomplete="off">
       <datalist id="cartProductOptions"></datalist>
+      <div id="cartProductSuggestions" class="product-suggestions hidden"></div>
       <div class="row2">
         <div><label>Price type</label>
           <select id="cartPriceType"><option value="retail">Retail</option><option value="wholesale">Wholesale</option></select>
@@ -441,12 +445,21 @@ function populateCartSelect(){
 function updateCartProductOptions(){
   const input=$('#cartProduct');
   const list=$('#cartProductOptions');
+  const suggestions=$('#cartProductSuggestions');
   if(!input || !list) return;
   const query=input.value.trim().toLowerCase();
-  const matches=query.length >= 1
+  const matches=query.length >= 2
     ? products.filter(p=>p.name.toLowerCase().startsWith(query))
     : products;
   list.innerHTML=matches.map(p=>`<option value="${escapeHtml(p.name)}"></option>`).join('');
+  if(!suggestions) return;
+  if(query.length<2 || !matches.length){ suggestions.innerHTML=''; suggestions.classList.add('hidden'); return; }
+  suggestions.innerHTML=matches.map(p=>`<button type="button" class="product-suggestion" data-product-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`).join('');
+  suggestions.classList.remove('hidden');
+  suggestions.querySelectorAll('[data-product-name]').forEach(button=>button.addEventListener('click',()=>{
+    input.value=button.dataset.productName;
+    suggestions.innerHTML=''; suggestions.classList.add('hidden');
+  }));
 }
 
 $('#cartProduct').addEventListener('input', updateCartProductOptions);
@@ -501,17 +514,13 @@ function requireBillContact(type){
   return true;
 }
 $('#whatsappBillBtn').addEventListener('click',()=>{
-  if(!requireBillContact('phone')) return;
-  window.open('https://wa.me/91'+customerPhone()+'?text='+encodeURIComponent(billMessage()),'_blank');
+  shareBillPdf('phone');
 });
 $('#smsBillBtn').addEventListener('click',()=>{
-  if(!requireBillContact('phone')) return;
-  window.location.href='sms:+91'+customerPhone()+'?body='+encodeURIComponent(billMessage());
+  shareBillPdf('phone');
 });
 $('#emailBillBtn').addEventListener('click',()=>{
-  if(!requireBillContact('email')) return;
-  const subject=`Bill from ${settings.name||'Soni Bangles'} - ${lastBill.date}`;
-  window.location.href='mailto:'+encodeURIComponent($('#custEmail').value.trim())+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(billMessage());
+  shareBillPdf('email');
 });
 
 // ---- Bill generation ----
@@ -605,6 +614,50 @@ $('#downloadPdfBtn').addEventListener('click', async ()=>{
     console.error(e); alert('Could not generate PDF: '+(e.message||e));
   }
 });
+
+async function shareBillPdf(type){
+  if(!requireBillContact(type)) return;
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    let y=50;
+    doc.setFontSize(18); doc.text(settings.name||'Soni Bangles', 297, y, {align:'center'}); y+=20;
+    doc.setFontSize(10);
+    if(settings.address){ doc.text(settings.address, 297, y, {align:'center'}); y+=14; }
+    if(settings.phone){ doc.text(settings.phone, 297, y, {align:'center'}); y+=14; }
+    if(settings.tagline){ doc.text(settings.tagline, 297, y, {align:'center'}); y+=14; }
+    y+=10;
+    doc.setFontSize(11);
+    doc.text('Bill To: '+lastBill.custName, 40, y); doc.text('Date: '+lastBill.date, 400, y); y+=16;
+    if(lastBill.custAddr){ doc.text(lastBill.custAddr, 40, y); y+=16; }
+    y+=10;
+    doc.setFontSize(10);
+    doc.text('Item', 40, y); doc.text('Type', 250, y); doc.text('Qty', 320, y); doc.text('Rate', 380, y); doc.text('Amount', 460, y);
+    y+=6; doc.line(40,y,555,y); y+=14;
+    lastBill.items.forEach(c=>{
+      if(y>760){ doc.addPage(); y=50; }
+      doc.text(String(c.name).slice(0,30), 40, y); doc.text(c.priceType, 250, y);
+      doc.text(String(c.qty), 320, y); doc.text('Rs.'+c.unit.toFixed(2), 380, y);
+      doc.text('Rs.'+(c.unit*c.qty).toFixed(2), 460, y); y+=16;
+    });
+    y+=6; doc.line(40,y,555,y); y+=20;
+    doc.setFontSize(13); doc.text('Grand Total: Rs.'+lastBill.total.toFixed(2), 555, y, {align:'right'});
+    y+=30; doc.setFontSize(9);
+    doc.text('Thank you for shopping with '+(settings.name||'Soni Bangles')+'!', 297, y, {align:'center'});
+    const filename=(settings.name||'Soni_Bangles').replace(/\s+/g,'_')+'_Bill_'+Date.now()+'.pdf';
+    const file=new File([doc.output('blob')],filename,{type:'application/pdf'});
+    if(!navigator.canShare || !navigator.canShare({files:[file]})){
+      const url=URL.createObjectURL(file); const link=document.createElement('a');
+      link.href=url; link.download=filename; link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      alert('PDF downloaded. This browser cannot attach files to WhatsApp, SMS, or email.');
+      return;
+    }
+    await navigator.share({files:[file],title:'Bill from '+(settings.name||'Soni Bangles')});
+  }catch(error){
+    if(error.name!=='AbortError') alert('Could not share the bill PDF: '+(error.message||error));
+  }
+}
 
 // ---- Settings ----
 $('#saveSettingsBtn').addEventListener('click', async ()=>{
