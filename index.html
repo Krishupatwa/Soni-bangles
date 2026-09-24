@@ -233,7 +233,7 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
 
 <script>
 const ACCESS_KEY='soni-bangles-access-v1';
-let accessState=loadAccessState();
+let accessState={owner:null,people:[]};
 let currentUser=null;
 let db=null, dbReady=false;
 let products=[]; // {id,name,wholesale,retail}
@@ -242,11 +242,26 @@ let cart=[]; // {name,unit,qty,priceType}
 
 const $=s=>document.querySelector(s);
 
-function loadAccessState(){
+function loadLocalAccessState(){
   try{return JSON.parse(localStorage.getItem(ACCESS_KEY))||{owner:null,people:[]};}
   catch(e){return {owner:null,people:[]};}
 }
-function saveAccessState(){ localStorage.setItem(ACCESS_KEY, JSON.stringify(accessState)); }
+async function loadAccessState(){
+  try{
+    const response=await fetch('/api/access');
+    if(!response.ok) throw new Error('Shared access is unavailable.');
+    accessState=await response.json();
+    localStorage.setItem(ACCESS_KEY,JSON.stringify(accessState));
+  }catch(error){
+    accessState=loadLocalAccessState();
+  }
+  updateAuthMode();
+}
+async function saveAccessState(){
+  localStorage.setItem(ACCESS_KEY,JSON.stringify(accessState));
+  const response=await fetch('/api/access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(accessState)});
+  if(!response.ok) throw new Error('Could not save shared access.');
+}
 function cleanPhone(value){ return String(value||'').replace(/\D/g,'').replace(/^91(?=\d{10}$)/,''); }
 function validPhone(phone){ return /^\d{10}$/.test(phone); }
 function setAuthError(message){ $('#authError').textContent=message||''; $('#authError').classList.toggle('hidden',!message); }
@@ -280,25 +295,30 @@ function removePerson(phone){
 }
 $('#authForm').addEventListener('submit',event=>{
   event.preventDefault(); setAuthError('');
-  const phone=cleanPhone($('#authPhone').value);
-  if(!validPhone(phone)){ setAuthError('Enter a valid 10 digit phone number.'); return; }
-  if(!accessState.owner){
-    const name=$('#authName').value.trim(); if(!name){ setAuthError('Enter your name to create the owner account.'); return; }
-    accessState.owner={name,phone}; accessState.people=[]; saveAccessState(); showApp({name,phone,role:'owner'}); return;
-  }
-  if(phone===accessState.owner.phone){ showApp({name:accessState.owner.name,phone,role:'owner'}); return; }
-  const person=(accessState.people||[]).find(item=>item.phone===phone);
-  if(person){ showApp({name:person.name,phone,role:'member'}); return; }
-  setAuthError('This number is not approved. Ask the owner to add you.');
+  loadAccessState().then(async()=>{
+    const phone=cleanPhone($('#authPhone').value);
+    if(!validPhone(phone)){ setAuthError('Enter a valid 10 digit phone number.'); return; }
+    if(!accessState.owner){
+      const name=$('#authName').value.trim(); if(!name){ setAuthError('Enter your name to create the owner account.'); return; }
+      accessState.owner={name,phone}; accessState.people=[];
+      try{ await saveAccessState(); showApp({name,phone,role:'owner'}); }
+      catch(error){ setAuthError('Owner account could not be saved. Check the Vercel storage connection.'); }
+      return;
+    }
+    if(phone===accessState.owner.phone){ showApp({name:accessState.owner.name,phone,role:'owner'}); return; }
+    const person=(accessState.people||[]).find(item=>item.phone===phone);
+    if(person){ showApp({name:person.name,phone,role:'member'}); return; }
+    setAuthError('This number is not approved. Ask the owner to add you.');
+  });
 });
 $('#logoutBtn').addEventListener('click',lockApp);
 $('#addAccessBtn').addEventListener('click',()=>{
   const name=$('#accessName').value.trim(); const phone=cleanPhone($('#accessPhone').value);
   if(!name || !validPhone(phone)){ alert('Enter a name and a valid 10 digit phone number.'); return; }
   if(phone===accessState.owner.phone || accessState.people.some(item=>item.phone===phone)){ alert('This phone number already has access.'); return; }
-  accessState.people.push({name,phone}); saveAccessState(); $('#accessName').value=''; $('#accessPhone').value=''; renderPeople();
+  accessState.people.push({name,phone}); saveAccessState().then(()=>{ $('#accessName').value=''; $('#accessPhone').value=''; renderPeople(); }).catch(()=>alert('Could not save this person. Check the Vercel storage connection.'));
 });
-updateAuthMode();
+loadAccessState();
 
 // ---- Tabs ----
 document.querySelectorAll('.tabbtn').forEach(b=>b.addEventListener('click',()=>{
