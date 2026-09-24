@@ -514,13 +514,13 @@ function requireBillContact(type){
   return true;
 }
 $('#whatsappBillBtn').addEventListener('click',()=>{
-  shareBillPdf('phone');
+  shareBillPdf('phone','WhatsApp');
 });
 $('#smsBillBtn').addEventListener('click',()=>{
-  shareBillPdf('phone');
+  shareBillPdf('phone','SMS');
 });
 $('#emailBillBtn').addEventListener('click',()=>{
-  shareBillPdf('email');
+  shareBillPdf('email','Email');
 });
 
 // ---- Bill generation ----
@@ -615,8 +615,10 @@ $('#downloadPdfBtn').addEventListener('click', async ()=>{
   }
 });
 
-async function shareBillPdf(type){
+async function shareBillPdf(type,target){
   if(!requireBillContact(type)) return;
+  let shareFile=null;
+  let shareFilename='bill.pdf';
   try{
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({unit:'pt', format:'a4'});
@@ -644,19 +646,33 @@ async function shareBillPdf(type){
     doc.setFontSize(13); doc.text('Grand Total: Rs.'+lastBill.total.toFixed(2), 555, y, {align:'right'});
     y+=30; doc.setFontSize(9);
     doc.text('Thank you for shopping with '+(settings.name||'Soni Bangles')+'!', 297, y, {align:'center'});
-    const filename=(settings.name||'Soni_Bangles').replace(/\s+/g,'_')+'_Bill_'+Date.now()+'.pdf';
-    const file=new File([doc.output('blob')],filename,{type:'application/pdf'});
-    if(!navigator.canShare || !navigator.canShare({files:[file]})){
-      const url=URL.createObjectURL(file); const link=document.createElement('a');
-      link.href=url; link.download=filename; link.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-      alert('PDF downloaded. This browser cannot attach files to WhatsApp, SMS, or email.');
+    shareFilename=(settings.name||'Soni_Bangles').replace(/\s+/g,'_')+'_Bill_'+Date.now()+'.pdf';
+    const file=new File([doc.output('blob')],shareFilename,{type:'application/pdf'});
+    shareFile=file;
+    let canShareFile=false;
+    try{ canShareFile=typeof navigator.canShare==='function' && navigator.canShare({files:[file]}); }catch(e){}
+    if(!canShareFile){
+      downloadSharedPdf(file,shareFilename);
+      alert('This browser cannot attach files to '+target+'. The PDF was downloaded; attach it from '+target+'.');
       return;
     }
     await navigator.share({files:[file],title:'Bill from '+(settings.name||'Soni Bangles')});
   }catch(error){
-    if(error.name!=='AbortError') alert('Could not share the bill PDF: '+(error.message||error));
+    if(error.name==='AbortError') return;
+    if(error.name==='NotAllowedError' || error.name==='SecurityError'){
+      if(shareFile) downloadSharedPdf(shareFile,shareFilename);
+      alert('Mobile sharing to '+target+' was blocked. The PDF was downloaded; attach it from '+target+'.');
+      return;
+    }
+    alert('Could not share the bill PDF: '+(error.message||error));
   }
+}
+
+function downloadSharedPdf(file,filename){
+  const url=URL.createObjectURL(file); const link=document.createElement('a');
+  link.href=url; link.download=filename; link.style.display='none';
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 // ---- Settings ----
