@@ -8,6 +8,7 @@
 :root{
   --bg:#dbeafe; --card:#ffffff; --ink:#2a1e1a; --sub:#7a6a5f;
   --accent:#facc15; --accent2:#8b3a3a; --border:#e8ddd0; --danger:#b23b3b;
+  --success:#2d7a55;
   --shadow:0 2px 10px rgba(60,40,20,0.08);
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
@@ -76,6 +77,23 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
 .bfoot{text-align:center;font-size:.72rem;color:#a99;margin-top:16px;}
 .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .empty{color:var(--sub);font-size:.85rem;text-align:center;padding:12px 0;}
+.auth-shell{min-height:100vh;display:grid;place-items:center;padding:24px 14px;background:radial-gradient(circle at 15% 15%,rgba(250,204,21,.22),transparent 32%),radial-gradient(circle at 85% 85%,rgba(139,58,58,.15),transparent 34%),var(--bg);}
+.auth-card{width:min(100%,430px);background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 18px 45px rgba(60,40,20,.12);}
+.auth-mark{width:52px;height:52px;display:grid;place-items:center;border-radius:15px;background:var(--accent);font-size:1.7rem;margin-bottom:18px;}
+.auth-card h1{margin:0 0 6px;font-size:1.5rem;}
+.auth-card p{color:var(--sub);font-size:.88rem;line-height:1.5;margin:0 0 18px;}
+.auth-note{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(250,204,21,.1);font-size:.78rem;color:var(--sub);margin-top:14px;}
+.phone-input{display:flex;gap:8px;}
+.phone-input span{display:grid;place-items:center;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:.9rem;color:var(--sub);}
+.auth-error{color:var(--danger);font-size:.82rem;margin-top:10px;}
+.access-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.access-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:rgba(45,122,85,.12);color:var(--success);font-size:.75rem;font-weight:600;white-space:nowrap;}
+.person-meta{display:flex;flex-direction:column;gap:2px;}
+.person-phone{font-size:.78rem;color:var(--sub);}
+.muted{color:var(--sub);font-size:.82rem;}
+.topbar{display:flex;justify-content:flex-end;max-width:640px;margin:0 auto;padding:0 12px 4px;}
+.session-chip{display:flex;align-items:center;gap:8px;color:var(--sub);font-size:.78rem;}
+.lock-btn{border:0;background:none;color:var(--accent2);font-weight:600;cursor:pointer;padding:4px 0;}
 @media print{
   body *{visibility:hidden;}
   #billPreview,#billPreview *{visibility:visible;}
@@ -85,14 +103,33 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
 </head>
 <body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<section id="authScreen" class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-mark">💍</div>
+    <h1 id="authTitle">Private billing workspace</h1>
+    <p id="authDescription">Only people you approve can open your products, bills, and business details.</p>
+    <form id="authForm">
+      <label id="authNameLabel" class="hidden">Your name</label>
+      <input id="authName" class="hidden" placeholder="Owner name" autocomplete="name">
+      <label>Phone number</label>
+      <div class="phone-input"><span>+91</span><input id="authPhone" type="tel" inputmode="numeric" placeholder="10 digit phone number" autocomplete="tel" required></div>
+      <button class="btn" id="authSubmit" type="submit">Continue as owner</button>
+      <div id="authError" class="auth-error hidden"></div>
+    </form>
+    <div class="auth-note" id="authNote">First time here? Your first phone number becomes the owner and gets full control.</div>
+  </div>
+</section>
+<div id="appShell" class="hidden">
 <header>
   <h1 id="bizTitle">💍 Soni Bangles</h1>
   <p>Store &amp; Billing Manager</p>
 </header>
+<div class="topbar"><div class="session-chip"><span id="sessionLabel"></span><button class="lock-btn" id="logoutBtn">Lock app</button></div></div>
 <nav>
   <button class="tabbtn active" data-tab="products">Products</button>
   <button class="tabbtn" data-tab="billing">New Bill</button>
   <button class="tabbtn" data-tab="settings">Settings</button>
+  <button class="tabbtn owner-only" data-tab="access">Access</button>
 </nav>
 <main>
 
@@ -121,6 +158,10 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
       <input id="custName" placeholder="Customer name">
       <label>Customer address</label>
       <input id="custAddr" placeholder="Customer address / phone">
+      <div class="row2">
+        <div><label>Customer phone</label><input id="custPhone" type="tel" inputmode="numeric" placeholder="10 digit number"></div>
+        <div><label>Customer email</label><input id="custEmail" type="email" placeholder="customer@email.com"></div>
+      </div>
     </div>
     <div class="card">
       <h2>Add Item to Bill</h2>
@@ -154,6 +195,9 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
     <div class="actions" id="billActions" style="display:none;">
       <button class="btn secondary" id="printBillBtn">🖨️ Print</button>
       <button class="btn secondary" id="downloadPdfBtn">⬇️ Download PDF</button>
+      <button class="btn secondary" id="whatsappBillBtn">💬 WhatsApp</button>
+      <button class="btn secondary" id="smsBillBtn">📱 SMS</button>
+      <button class="btn secondary" id="emailBillBtn">✉️ Email</button>
     </div>
   </section>
 
@@ -172,9 +216,25 @@ table.btab th{color:var(--accent2);font-size:.72rem;text-transform:uppercase;}
     </div>
   </section>
 
+  <section id="tab-access" class="hidden owner-only">
+    <div class="card">
+      <div class="access-head"><div><h2>People with access</h2><p class="muted">You decide who can open this workspace.</p></div><span class="access-badge">● Owner only</span></div>
+      <label>Person's name</label>
+      <input id="accessName" placeholder="e.g. Priya Sharma">
+      <label>Phone number</label>
+      <div class="phone-input"><span>+91</span><input id="accessPhone" type="tel" inputmode="numeric" placeholder="10 digit phone number"></div>
+      <button class="btn" id="addAccessBtn">Add person</button>
+      <ul class="plist" id="peopleList" style="margin-top:14px;"></ul>
+    </div>
+  </section>
+
 </main>
+</div>
 
 <script>
+const ACCESS_KEY='soni-bangles-access-v1';
+let accessState=loadAccessState();
+let currentUser=null;
 let db=null, dbReady=false;
 let products=[]; // {id,name,wholesale,retail}
 let settings={name:"Soni Bangles",address:"",phone:"",tagline:"Wholesale & Retail Bangles"};
@@ -182,11 +242,69 @@ let cart=[]; // {name,unit,qty,priceType}
 
 const $=s=>document.querySelector(s);
 
+function loadAccessState(){
+  try{return JSON.parse(localStorage.getItem(ACCESS_KEY))||{owner:null,people:[]};}
+  catch(e){return {owner:null,people:[]};}
+}
+function saveAccessState(){ localStorage.setItem(ACCESS_KEY, JSON.stringify(accessState)); }
+function cleanPhone(value){ return String(value||'').replace(/\D/g,'').replace(/^91(?=\d{10}$)/,''); }
+function validPhone(phone){ return /^\d{10}$/.test(phone); }
+function setAuthError(message){ $('#authError').textContent=message||''; $('#authError').classList.toggle('hidden',!message); }
+function updateAuthMode(){
+  const firstUse=!accessState.owner;
+  $('#authTitle').textContent=firstUse?'Set up private access':'Welcome back';
+  $('#authDescription').textContent=firstUse?'Create the owner account for your private billing workspace.':'Sign in with a phone number approved by the owner.';
+  $('#authName').classList.toggle('hidden',!firstUse); $('#authNameLabel').classList.toggle('hidden',!firstUse);
+  $('#authName').required=firstUse; $('#authSubmit').textContent=firstUse?'Create owner access':'Open workspace';
+  $('#authNote').textContent=firstUse?'Your first phone number becomes the owner and gets full control.':'Only added people can see the billing workspace. Ask the owner to add your number.';
+}
+function showApp(user){
+  currentUser=user; $('#authScreen').classList.add('hidden'); $('#appShell').classList.remove('hidden');
+  $('#sessionLabel').textContent=(user.role==='owner'?'Owner':'Member')+' · '+user.name;
+  document.querySelectorAll('.owner-only[data-tab]').forEach(el=>el.classList.toggle('hidden',user.role!=='owner'));
+  if(user.role!=='owner' && $('#tab-access')) $('#tab-access').classList.add('hidden');
+  renderPeople();
+}
+function lockApp(){ currentUser=null; $('#appShell').classList.add('hidden'); $('#authScreen').classList.remove('hidden'); $('#authPhone').value=''; $('#authName').value=''; setAuthError(''); updateAuthMode(); }
+function renderPeople(){
+  const list=$('#peopleList'); if(!list) return;
+  const people=accessState.people||[];
+  if(!people.length){ list.innerHTML='<li class="empty">No additional people yet.</li>'; return; }
+  list.innerHTML=people.map(person=>`<li><div class="person-meta"><span class="pname">${escapeHtml(person.name)}</span><span class="person-phone">+91 ${escapeHtml(person.phone)}</span></div><button class="btn danger" data-remove-person="${escapeHtml(person.phone)}">Remove</button></li>`).join('');
+  list.querySelectorAll('[data-remove-person]').forEach(button=>button.addEventListener('click',()=>removePerson(button.dataset.removePerson)));
+}
+function removePerson(phone){
+  const person=accessState.people.find(item=>item.phone===phone); if(!person) return;
+  if(!confirm('Remove '+person.name+' from this workspace?')) return;
+  accessState.people=accessState.people.filter(item=>item.phone!==phone); saveAccessState(); renderPeople();
+}
+$('#authForm').addEventListener('submit',event=>{
+  event.preventDefault(); setAuthError('');
+  const phone=cleanPhone($('#authPhone').value);
+  if(!validPhone(phone)){ setAuthError('Enter a valid 10 digit phone number.'); return; }
+  if(!accessState.owner){
+    const name=$('#authName').value.trim(); if(!name){ setAuthError('Enter your name to create the owner account.'); return; }
+    accessState.owner={name,phone}; accessState.people=[]; saveAccessState(); showApp({name,phone,role:'owner'}); return;
+  }
+  if(phone===accessState.owner.phone){ showApp({name:accessState.owner.name,phone,role:'owner'}); return; }
+  const person=(accessState.people||[]).find(item=>item.phone===phone);
+  if(person){ showApp({name:person.name,phone,role:'member'}); return; }
+  setAuthError('This number is not approved. Ask the owner to add you.');
+});
+$('#logoutBtn').addEventListener('click',lockApp);
+$('#addAccessBtn').addEventListener('click',()=>{
+  const name=$('#accessName').value.trim(); const phone=cleanPhone($('#accessPhone').value);
+  if(!name || !validPhone(phone)){ alert('Enter a name and a valid 10 digit phone number.'); return; }
+  if(phone===accessState.owner.phone || accessState.people.some(item=>item.phone===phone)){ alert('This phone number already has access.'); return; }
+  accessState.people.push({name,phone}); saveAccessState(); $('#accessName').value=''; $('#accessPhone').value=''; renderPeople();
+});
+updateAuthMode();
+
 // ---- Tabs ----
 document.querySelectorAll('.tabbtn').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabbtn').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
-  ['products','billing','settings'].forEach(t=>$('#tab-'+t).classList.toggle('hidden', t!==b.dataset.tab));
+  ['products','billing','settings','access'].forEach(t=>$('#tab-'+t).classList.toggle('hidden', t!==b.dataset.tab));
 }));
 
 // ---- DB init ----
@@ -350,6 +468,32 @@ function printBill(){
 
 $('#printBillBtn').addEventListener('click', printBill);
 
+function billMessage(){
+  if(!lastBill) return '';
+  const items=lastBill.items.map(c=>`${c.name} x ${c.qty} = Rs.${(c.unit*c.qty).toFixed(2)}`).join('\n');
+  return `Hello ${lastBill.custName},\n\nYour bill from ${settings.name||'Soni Bangles'}\nDate: ${lastBill.date}\n\n${items}\n\nGrand Total: Rs.${lastBill.total.toFixed(2)}\n\nThank you for shopping with ${settings.name||'Soni Bangles'}!`;
+}
+function customerPhone(){ return cleanPhone($('#custPhone').value); }
+function requireBillContact(type){
+  if(!lastBill){ alert('Generate the bill first.'); return false; }
+  if(type==='phone' && !validPhone(customerPhone())){ alert('Enter a valid customer phone number first.'); return false; }
+  if(type==='email' && !$('#custEmail').value.trim()){ alert('Enter a customer email address first.'); return false; }
+  return true;
+}
+$('#whatsappBillBtn').addEventListener('click',()=>{
+  if(!requireBillContact('phone')) return;
+  window.open('https://wa.me/91'+customerPhone()+'?text='+encodeURIComponent(billMessage()),'_blank');
+});
+$('#smsBillBtn').addEventListener('click',()=>{
+  if(!requireBillContact('phone')) return;
+  window.location.href='sms:+91'+customerPhone()+'?body='+encodeURIComponent(billMessage());
+});
+$('#emailBillBtn').addEventListener('click',()=>{
+  if(!requireBillContact('email')) return;
+  const subject=`Bill from ${settings.name||'Soni Bangles'} - ${lastBill.date}`;
+  window.location.href='mailto:'+encodeURIComponent($('#custEmail').value.trim())+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(billMessage());
+});
+
 // ---- Bill generation ----
 let lastBill=null;
 $('#genBillBtn').addEventListener('click', ()=>{
@@ -361,7 +505,9 @@ $('#genBillBtn').addEventListener('click', ()=>{
   const date=new Date().toLocaleDateString();
   const custName=$('#custName').value.trim()||'Walk-in Customer';
   const custAddr=$('#custAddr').value.trim();
-  lastBill={custName, custAddr, date, items:cart.map(c=>({...c})), total};
+  const custPhone=cleanPhone($('#custPhone').value);
+  const custEmail=$('#custEmail').value.trim();
+  lastBill={custName, custAddr, custPhone, custEmail, date, items:cart.map(c=>({...c})), total};
   preview.innerHTML=`
     <div class="bhead">
       <div class="bname">${escapeHtml(settings.name||'Soni Bangles')}</div>
